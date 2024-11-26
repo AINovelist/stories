@@ -6,16 +6,16 @@ This folder features stories and visuals designed to engage children with the th
 
 The following images represent children and their connection to the theme of air pollution reduction. These visuals aim to inspire and set the tone for the stories in this folder:
 
-![Image 1](../assets/images/Air_Pollution_Reduction_1.jpeg)  
+![Image 1](../assets/images/AirـPollutionـReductionـ1.jpeg)  
 *Kids working together for cleaner air.*  
 
-![Image 2](../assets/images/Air_Pollution_Reduction_2.jpeg)  
+![Image 2](../assets/images/AirـPollutionـReductionـ2.jpeg)  
 *Imagining a world with fresh, pollution-free skies.*  
 
-![Image 3](../assets/images/Air_Pollution_Reduction_3.jpeg)  
+![Image 3](../assets/images/AirـPollutionـReductionـ3.jpeg)  
 *Small actions making a big difference in air quality.*  
 
-![Image 4](../assets/images/Air_Pollution_Reduction_4.jpeg)  
+![Image 4](../assets/images/AirـPollutionـReductionـ4.jpeg)  
 *A reminder that every child can be an environmental hero.*  
 
 ---
