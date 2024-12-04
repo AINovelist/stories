@@ -258,7 +258,10 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             
             print(f"Image saved as {image_path}")
 
-            # Now upload the image to GitHub (without base64 encoding)
+            # Now base64 encode the image data before uploading to GitHub
+            encoded_image_data = base64.b64encode(image_data).decode('utf-8')
+
+            # Upload the image to GitHub (base64 encoded content)
             commit_message = f"Add generated image for {Path(md_file_path).name}"
             repo_path = str(image_path).replace("\\", "/")
 
@@ -267,7 +270,7 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
                 owner=github_owner,
                 repo=github_repo,
                 path=repo_path,
-                content=image_data,  # Send the raw binary content
+                content=encoded_image_data,  # Send the base64-encoded content
                 commit_message=commit_message,
                 branch=github_branch,
                 github_token=github_pat if github_pat else os.getenv('GHB_PAT')
