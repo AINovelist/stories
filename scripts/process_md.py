@@ -9,6 +9,7 @@ import time
 
 # Define available art styles
 AVAILABLE_ART_STYLES = [
+    "Cartoon",
     "Watercolor",
     "Flat Design",
     "Vector Art",
@@ -99,19 +100,39 @@ def generate_custom_prompt(metadata, md_content, art_style):
     prompt += f"**Topic:** {metadata['topic']}\n"
     prompt += f"**Location:** {metadata['location'].replace('-', ' ').title()}\n"
 
-    # Include sections
+    # Include sections with interactive prompts for the artist
     for heading, content in sections.items():
         prompt += f"\n**{heading}**: {content}\n"
 
+    # Art Style Specific Instructions
+    prompt += f"\n**Art Style:** {art_style}\n"
+    
+    if art_style == "Cartoon":
+        prompt += "The characters should have exaggerated facial expressions and large, expressive eyes to appeal to children. Bright colors should dominate the scene.\n"
+    elif art_style == "Watercolor":
+        prompt += "Use soft brush strokes and a gentle color palette. The scenes should have a dreamy, serene feel.\n"
+    elif art_style == "Flat Design":
+        prompt += "The artwork should have simple shapes and minimal shading, with a modern, clean look.\n"
+    elif art_style == "Vector Art":
+        prompt += "Create smooth, clean lines and flat colors with a modern digital style.\n"
+    elif art_style == "Hand-Drawn":
+        prompt += "The illustration should have a hand-drawn, sketchy feel with detailed linework and textured coloring.\n"
+    elif art_style == "3D Rendered":
+        prompt += "The characters and environment should be realistically rendered in 3D, with a vibrant color palette.\n"
+    elif art_style == "Storybook Illustration":
+        prompt += "The style should be whimsical, with detailed backgrounds and expressive characters, as if from a classic children's book.\n"
+    elif art_style == "Chibi":
+        prompt += "The characters should have small bodies and large heads with cute, oversized eyes to give them a playful, adorable look.\n"
+
     # Additional instructions
     prompt += (
-        f"\nArt Style: {art_style}\n"
-        "Color Scheme: Bright and lively colors.\n"
+        "\nColor Scheme: Bright and lively colors.\n"
         "**Orientation:** Landscape\n"
         "**Aspect Ratio:** 16:9\n"
     )
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
+
 
 def extract_title(md_content):
     """
