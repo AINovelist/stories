@@ -211,8 +211,8 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             "prompt": prompt,
             "height": 576,       # For 16:9 aspect ratio with width=1024
             "width": 1024,
-            "guidance": 7.5,     # Adjust as needed
-            "num_steps": 20      # Maximum allowed
+            # "guidance": 7.5,     # Adjust as needed
+            # "num_steps": 20      # Maximum allowed
             # Add other parameters if needed
         }
         headers = {
