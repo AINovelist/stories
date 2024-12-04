@@ -1,11 +1,11 @@
 import os
 import sys
 import base64
-import time
 import requests
 from pathlib import Path
 import re
 import unicodedata
+import time
 
 def get_env_variable(name):
     """Retrieve environment variable or exit if not found."""
@@ -31,12 +31,12 @@ def extract_metadata(md_file_path):
     Returns a dictionary with keys: kid_name, age, location, random_id, topic.
     """
     path = Path(md_file_path)
-    # Extract topic from the parent directory name (e.g., Air Pollution Reduction)
+    # Extract topic from the parent directory name (e.g., Tree Preservation)
     # Assuming structure: /kids/<Topic>/en/<filename>.md
     topic = path.parent.parent.name
 
     # Extract filename without extension
-    filename = path.stem  # e.g., 'nazanin-10-in-mountainous-area-7657810281'
+    filename = path.stem  # e.g., 'nima-10-in-suburbs-2178184495'
 
     # Split the filename by hyphens
     parts = filename.split('-')
@@ -80,8 +80,8 @@ def generate_custom_prompt(metadata, md_content):
     title = extract_title(md_content)
     sections = extract_sections(md_content)
 
-    # Base prompt
-    prompt = f"Create a vibrant and engaging illustration for children based on the story titled '{title}':\n"
+    # Base prompt with aspect ratio instructions
+    prompt = f"Create a vibrant and engaging **wide**, **landscape-oriented** illustration for children based on the story titled '{title}':\n"
 
     # Include metadata
     prompt += f"\n**Author:** {metadata['kid_name']} (Age: {metadata['age']})\n"
@@ -93,7 +93,12 @@ def generate_custom_prompt(metadata, md_content):
         prompt += f"\n**{heading}**: {content}\n"
 
     # Additional instructions
-    prompt += "\nArt Style: Cartoon\nColor Scheme: Bright and lively colors.\nEnsure that the image captures the essence of water conservation and animal protection.\n**Orientation:** Landscape\n**Aspect Ratio:** 16:9"
+    prompt += (
+        "\nArt Style: Cartoon\n"
+        "Color Scheme: Bright and lively colors.\n"
+        "**Orientation:** Landscape\n"
+        "**Aspect Ratio:** 16:9"
+    )
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
 
@@ -131,7 +136,7 @@ def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
         try:
             response = requests.post(api_url, json=payload, headers=headers)
             response.raise_for_status()
-            return response.json()
+            return response.json()  # Assuming the response is JSON
         except requests.exceptions.RequestException as e:
             if attempt == retries:
                 print(f"Failed after {retries} attempts: {e}")
@@ -200,11 +205,15 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         prompt = generate_custom_prompt(metadata, content)
         print(f"Generated Prompt: {prompt}")
 
-        # Prepare API request
-        api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+        # Prepare API request with aspect_ratio
+        api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
         payload = {
             "prompt": prompt,
-            "steps": 8  # Adjust as needed
+            "height": 576,       # For 16:9 aspect ratio with width=1024
+            "width": 1024,
+            "guidance": 7.5,     # Adjust as needed
+            "num_steps": 20      # Maximum allowed
+            # Add other parameters if needed
         }
         headers = {
             "Authorization": f"Bearer {api_token}",
@@ -217,22 +226,41 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
 
         print(f"API Response: {data}")
 
-        # Updated extraction of 'image' from 'result'
-        if 'result' not in data or 'image' not in data['result']:
-            print(f"Error: No 'image' field in API response for {md_file_path}")
-            return None  # Indicate failure
+        # Assuming the response contains the image data as a base64-encoded string
+        # If the API returns the image directly as binary, adjust accordingly
+
+        if isinstance(data, dict):
+            # Check if 'result' contains 'image' key
+            if 'result' in data and 'image' in data['result']:
+                image_base64 = data['result']['image']
+            else:
+                print(f"Error: No 'image' field in API response for {md_file_path}")
+                return None
+        elif isinstance(data, str):
+            # If the response is directly the base64 string
+            image_base64 = data
+        else:
+            print(f"Unexpected API response format for {md_file_path}: {data}")
+            return None
 
         # Decode the Base64 image
-        image_data = base64.b64decode(data['result']['image'])
+        image_data = base64.b64decode(image_base64)
 
         # Encode the image data in Base64 for GitHub API
-        image_base64 = base64.b64encode(image_data).decode('utf-8')
+        image_base64_github = base64.b64encode(image_data).decode('utf-8')
 
         # Determine image extension (assuming PNG; adjust if necessary)
         image_extension = 'png'
         image_filename = Path(md_file_path).stem + f".{image_extension}"
-        # image_path = Path(md_file_path).parent / image_filename
+
+        # Define the images directory path
         images_dir = Path(md_file_path).parent.parent / 'images'  # Moves up from /en/ to the topic directory and then into /images/
+
+        # Ensure the images directory exists locally (optional)
+        # Not necessary for GitHub API uploads, but useful if you want to keep a local copy
+        # images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set the full image path
         image_path = images_dir / image_filename
 
         # Generate commit message
@@ -246,10 +274,10 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             owner=github_owner,
             repo=github_repo,
             path=repo_path,
-            content=image_base64,
+            content=image_base64_github,
             commit_message=commit_message,
             branch=github_branch,
-            github_token=github_pat if github_pat else os.getenv('GITHUB_PAT')
+            github_token=github_pat if github_pat else os.getenv('GHB_PAT')
         )
 
         if success:
