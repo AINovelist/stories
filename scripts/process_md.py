@@ -217,7 +217,7 @@ def upload_file_to_github(owner, repo, path, content, commit_message, branch='ma
         print(f"Error uploading file to GitHub: {put_response.status_code} {put_response.text}")
         return False
 
-def process_markdown(md_file_path, account_id, api_token, github_owner, github_repo, github_branch='main', github_pat=None):
+def process_markdownold(md_file_path, account_id, api_token, github_owner, github_repo, github_branch='main', github_pat=None):
     """Process a single Markdown file to generate and upload an image."""
     metadata = extract_metadata(md_file_path)
     if not metadata:
@@ -324,6 +324,111 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         print(f"An error occurred while processing {md_file_path}: {e}")
 
     return None  # Indicate failure
+
+
+def process_markdown(md_file_path, account_id, api_token, github_owner, github_repo, github_branch='main', github_pat=None):
+    """Process a single Markdown file to generate and upload an image."""
+    metadata = extract_metadata(md_file_path)
+    if not metadata:
+        return None
+
+    try:
+        print(f"Reading Markdown file: {md_file_path}")
+        # Read the .md file content
+        with open(md_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+
+        # Generate custom prompt
+        prompt = generate_custom_prompt(metadata, content)
+        print(f"Generated Prompt: {prompt}")
+
+        # Prepare API request with aspect_ratio
+        api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
+        payload = {
+            "prompt": prompt,
+            "height": 576,       # For 16:9 aspect ratio with width=1024
+            "width": 1024,
+            # "guidance": 7.5,     # Adjust as needed
+            # "num_steps": 20      # Maximum allowed
+            # Add other parameters if needed
+        }
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+
+        print(f"Sending request to Cloudflare AI API for file: {md_file_path}")
+        # Send the request to the Cloudflare AI API with retry logic
+        data = send_api_request(api_url, payload, headers)
+
+        print(f"API Response: {data}")
+
+        # Check if the response contains image data
+        if isinstance(data, dict):
+            # Assuming the API might return binary data or Base64 encoded image
+            if 'result' in data and 'image' in data['result']:
+                image_data = data['result']['image']
+                # If image data is in Base64 format
+                if isinstance(image_data, str):
+                    image_data = base64.b64decode(image_data)
+                # If image data is already in binary format, we don't need to decode
+                else:
+                    print("Received binary image data.")
+            else:
+                print(f"Error: No 'image' field in API response for {md_file_path}")
+                return None
+        else:
+            print(f"Unexpected API response format for {md_file_path}: {data}")
+            return None
+
+        # Save the image to a file
+        image_filename = Path(md_file_path).stem + ".png"
+        images_dir = Path(md_file_path).parent.parent / 'images'  # Moves up from /en/ to the topic directory and then into /images/
+
+        # Ensure the images directory exists locally (optional)
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save the image data to a file
+        image_path = images_dir / image_filename
+        with open(image_path, 'wb') as f:
+            f.write(image_data)
+        print(f"Image saved to {image_path}")
+
+        # Upload the image to GitHub using the Contents API
+        with open(image_path, "rb") as image_file:
+            image_base64_github = base64.b64encode(image_file.read()).decode('utf-8')
+
+        commit_message = f"Add generated image for {Path(md_file_path).name}"
+        repo_path = str(image_path).replace("\\", "/")  # GitHub requires forward slashes
+
+        # Upload the image to GitHub using the Contents API
+        success = upload_file_to_github(
+            owner=github_owner,
+            repo=github_repo,
+            path=repo_path,
+            content=image_base64_github,
+            commit_message=commit_message,
+            branch=github_branch,
+            github_token=github_pat if github_pat else os.getenv('GHB_PAT')
+        )
+
+        if success:
+            print(f"Successfully uploaded {image_filename} to GitHub.")
+            return image_path
+        else:
+            print(f"Failed to upload {image_filename} to GitHub.")
+            return None
+
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Request failed for {md_file_path}: {e}")
+        print(f"Response Content: {e.response.text}")
+    except requests.exceptions.RequestException as e:
+        print(f"HTTP Request failed for {md_file_path}: {e}")
+    except Exception as e:
+        print(f"An error occurred while processing {md_file_path}: {e}")
+
+    return None  # Indicate failure
+
 
 def main():
     """Main function to process the provided Markdown file."""
