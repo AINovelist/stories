@@ -231,7 +231,9 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         # Determine image extension (assuming PNG; adjust if necessary)
         image_extension = 'png'
         image_filename = Path(md_file_path).stem + f".{image_extension}"
-        image_path = Path(md_file_path).parent / image_filename
+        # image_path = Path(md_file_path).parent / image_filename
+        images_dir = Path(md_file_path).parent.parent / 'images'  # Moves up from /en/ to the topic directory and then into /images/
+        image_path = images_dir / image_filename
 
         # Generate commit message
         commit_message = f"Add generated image for {Path(md_file_path).name}"
