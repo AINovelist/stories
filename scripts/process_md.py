@@ -38,6 +38,8 @@ def process_markdown(md_file_path, account_id, api_token):
         print(f"Sending request to Cloudflare AI API for file: {md_file_path}")
         # Send the request to the Cloudflare AI API
         response = requests.post(api_url, json=payload, headers=headers)
+        print(f"API Response Status: {response.status_code}")
+        print(f"API Response Body: {response.text}")
         response.raise_for_status()  # Raise an error for bad status codes
 
         data = response.json()
@@ -68,6 +70,9 @@ def process_markdown(md_file_path, account_id, api_token):
         subprocess.run(['git', 'commit', '-m', commit_message], check=True)
         print(f"Committed {image_filename}")
 
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Request failed for {md_file_path}: {e}")
+        print(f"Response Content: {e.response.text}")
     except requests.exceptions.RequestException as e:
         print(f"HTTP Request failed for {md_file_path}: {e}")
     except subprocess.CalledProcessError as e:
