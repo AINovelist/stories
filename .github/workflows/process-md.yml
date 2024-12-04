@@ -28,7 +28,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          node <<EOF
+          node <<'EOF'
           const fs = require('fs');
           const path = require('path');
           const axios = require('axios');
@@ -38,8 +38,8 @@ jobs:
             const gitDiffCommand = 'git diff --name-status HEAD^ HEAD';
             const { execSync } = require('child_process');
             const output = execSync(gitDiffCommand).toString();
-            const files = output.split('\\n').filter(line => line).map(line => {
-              const [status, filePath] = line.split('\\t');
+            const files = output.split('\n').filter(line => line).map(line => {
+              const [status, filePath] = line.split('\t');
               return { status, filePath };
             });
             return files;
@@ -53,6 +53,7 @@ jobs:
 
           // Main processing function
           const processFiles = async () => {
+            const { execSync } = require('child_process');
             const modifiedFiles = getModifiedFiles();
             const mdFiles = modifiedFiles.filter(file => file.status === 'A' && file.filePath.endsWith('.md') && file.filePath.includes('/en/'));
 
@@ -61,7 +62,7 @@ jobs:
               const fileContent = fs.readFileSync(filePath, 'utf8');
 
               // Create prompt (customize this as needed)
-              const prompt = fileContent.replace(/\\n/g, ' ').substring(0, 2000); // Ensure prompt length <= 2048
+              const prompt = fileContent.replace(/\n/g, ' ').substring(0, 2000); // Ensure prompt length <= 2048
 
               // Prepare API request
               const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
