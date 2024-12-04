@@ -33,30 +33,43 @@ def extract_metadata(md_file_path):
     """
     path = Path(md_file_path)
     # Extract topic from the parent directory name (e.g., Air Pollution Reduction)
-    topic = path.parent.name
+    topic = path.parent.parent.name  # Assuming structure: /kids/<Topic>/en/<filename>.md
 
     # Extract filename without extension
-    filename = path.stem  # e.g., 'baran-6-in-city-8406805212'
+    filename = path.stem  # e.g., 'baran-6-in-city-8406805212' or '10-in-village-1425637061'
 
-    # Regex pattern to match the naming convention
-    pattern = r'^(?P<kid_name>.+)-(?P<age>[2-9]|1[0-1])-in-(?P<location>[^-]+)-(?P<random_id>\d+)$'
-    match = re.match(pattern, filename)
+    # Split the filename by hyphens
+    parts = filename.split('-')
 
-    if not match:
-        print(f"Error: Filename '{filename}' does not match the expected pattern.")
-        return None
+    # Determine if the first part is age (2-11)
+    if re.fullmatch(r'[2-9]|1[0-1]', parts[0]):
+        # No kid_name
+        kid_name = "Unknown"
+        age = parts[0]
+        if len(parts) < 4:
+            print(f"Error: Filename '{filename}' does not have enough parts.")
+            return None
+        location = parts[2]
+        random_id = parts[3]
+    else:
+        # kid_name present
+        if len(parts) < 5:
+            print(f"Error: Filename '{filename}' does not have enough parts.")
+            return None
+        kid_name = parts[0]
+        age = parts[1]
+        location = parts[3]
+        random_id = parts[4]
 
-    metadata = match.groupdict()
-
-    # Handle non-English characters in kid_name
-    metadata['kid_name_clean'] = slugify(metadata['kid_name'])
+    # Clean kid_name
+    kid_name_clean = slugify(kid_name)
 
     return {
-        'kid_name': metadata['kid_name'],
-        'kid_name_clean': metadata['kid_name_clean'],
-        'age': metadata['age'],
-        'location': metadata['location'],
-        'random_id': metadata['random_id'],
+        'kid_name': kid_name,
+        'kid_name_clean': kid_name_clean,
+        'age': age,
+        'location': location,
+        'random_id': random_id,
         'topic': topic
     }
 
