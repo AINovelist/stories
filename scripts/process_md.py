@@ -3,8 +3,6 @@ import sys
 import base64
 import requests
 from pathlib import Path
-import subprocess
-import time
 import re
 import unicodedata
 
@@ -125,24 +123,51 @@ def extract_sections(md_content):
         sections[last_heading] = md_content[last_index:].strip()
     return sections
 
-def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
-    """Send POST request to the API with retry logic."""
-    for attempt in range(1, retries + 1):
-        try:
-            response = requests.post(api_url, json=payload, headers=headers)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            if attempt == retries:
-                print(f"Failed after {retries} attempts: {e}")
-                raise
-            else:
-                wait_time = backoff_factor ** attempt
-                print(f"Attempt {attempt} failed: {e}. Retrying in {wait_time} seconds...")
-                time.sleep(wait_time)
+def upload_file_to_github(owner, repo, path, content, commit_message, branch='main', github_token=None):
+    """
+    Uploads a file to GitHub using the Contents API.
+    If the file exists, it updates it. Otherwise, it creates a new file.
+    """
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}"
+    headers = {
+        "Authorization": f"Bearer {github_token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
 
-def process_markdown(md_file_path, account_id, api_token):
-    """Process a single Markdown file to generate and commit an image."""
+    # Check if the file already exists to get its SHA
+    response = requests.get(api_url, headers=headers)
+    if response.status_code == 200:
+        # File exists, prepare to update
+        file_info = response.json()
+        sha = file_info['sha']
+        payload = {
+            "message": commit_message,
+            "content": content,
+            "sha": sha,
+            "branch": branch
+        }
+    elif response.status_code == 404:
+        # File does not exist, prepare to create
+        payload = {
+            "message": commit_message,
+            "content": content,
+            "branch": branch
+        }
+    else:
+        print(f"Error accessing {api_url}: {response.status_code} {response.text}")
+        return False
+
+    # Create or update the file
+    put_response = requests.put(api_url, json=payload, headers=headers)
+    if put_response.status_code in [200, 201]:
+        print(f"Successfully {'updated' if response.status_code == 200 else 'created'} {path}")
+        return True
+    else:
+        print(f"Error uploading file to GitHub: {put_response.status_code} {put_response.text}")
+        return False
+
+def process_markdown(md_file_path, account_id, api_token, github_owner, github_repo, github_branch='main', github_pat=None):
+    """Process a single Markdown file to generate and upload an image."""
     metadata = extract_metadata(md_file_path)
     if not metadata:
         return None
@@ -182,35 +207,43 @@ def process_markdown(md_file_path, account_id, api_token):
         # Decode the Base64 image
         image_data = base64.b64decode(data['result']['image'])
 
+        # Encode the image data in Base64 for GitHub API
+        image_base64 = base64.b64encode(image_data).decode('utf-8')
+
         # Determine image extension (assuming PNG; adjust if necessary)
         image_extension = 'png'
         image_filename = Path(md_file_path).stem + f".{image_extension}"
         image_path = Path(md_file_path).parent / image_filename
 
-        # Save the image
-        with open(image_path, 'wb') as img_file:
-            img_file.write(image_data)
-        print(f"Image saved to {image_path}")
-
-        # Configure Git user
-        subprocess.run(['git', 'config', 'user.name', 'github-actions[bot]'], check=True)
-        subprocess.run(['git', 'config', 'user.email', 'github-actions[bot]@users.noreply.github.com'], check=True)
-
-        # Add and commit the image
-        subprocess.run(['git', 'add', str(image_path)], check=True)
+        # Generate commit message
         commit_message = f"Add generated image for {Path(md_file_path).name}"
-        subprocess.run(['git', 'commit', '-m', commit_message], check=True)
-        print(f"Committed {image_filename}")
 
-        return image_path  # Return the path for potential further use
+        # Define the path in the repository
+        repo_path = str(image_path)
+
+        # Upload the image to GitHub using the Contents API
+        success = upload_file_to_github(
+            owner=github_owner,
+            repo=github_repo,
+            path=repo_path,
+            content=image_base64,
+            commit_message=commit_message,
+            branch=github_branch,
+            github_token=github_pat if github_pat else os.getenv('GITHUB_PAT')
+        )
+
+        if success:
+            print(f"Successfully uploaded {image_filename} to GitHub.")
+            return image_path
+        else:
+            print(f"Failed to upload {image_filename} to GitHub.")
+            return None
 
     except requests.exceptions.HTTPError as e:
         print(f"HTTP Request failed for {md_file_path}: {e}")
         print(f"Response Content: {e.response.text}")
     except requests.exceptions.RequestException as e:
         print(f"HTTP Request failed for {md_file_path}: {e}")
-    except subprocess.CalledProcessError as e:
-        print(f"Git command failed for {md_file_path}: {e}")
     except Exception as e:
         print(f"An error occurred while processing {md_file_path}: {e}")
 
@@ -230,15 +263,28 @@ def main():
     account_id = get_env_variable('CLOUDFLARE_ACCOUNT_ID')
     api_token = get_env_variable('CLOUDFLARE_API_TOKEN')
 
-    image_path = process_markdown(md_file_path, account_id, api_token)
+    # GitHub Repository Details
+    github_owner = "AINovelist"  # Replace with your GitHub username or organization
+    github_repo = "stories"       # Replace with your repository name
+    github_branch = "main"        # Replace with your default branch name if different
+
+    # Optional: Use a GitHub PAT if needed
+    github_pat = os.getenv('GHB_PAT')  # Ensure you set this in your GitHub Secrets
+
+    image_path = process_markdown(
+        md_file_path,
+        account_id,
+        api_token,
+        github_owner,
+        github_repo,
+        github_branch,
+        github_pat
+    )
 
     if image_path:
-        # Push the commit
-        try:
-            subprocess.run(['git', 'push'], check=True)
-            print("Pushed changes to the repository.")
-        except subprocess.CalledProcessError as e:
-            print(f"Error pushing changes: {e}")
+        print("Image processing and upload completed successfully.")
+    else:
+        print("Image processing or upload failed.")
 
 if __name__ == "__main__":
     main()
