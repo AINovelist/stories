@@ -1,6 +1,7 @@
 import os
 import sys
 import base64
+import time
 import requests
 from pathlib import Path
 import re
@@ -31,7 +32,8 @@ def extract_metadata(md_file_path):
     """
     path = Path(md_file_path)
     # Extract topic from the parent directory name (e.g., Air Pollution Reduction)
-    topic = path.parent.parent.name  # Assuming structure: /kids/<Topic>/en/<filename>.md
+    # Assuming structure: /kids/<Topic>/en/<filename>.md
+    topic = path.parent.parent.name
 
     # Extract filename without extension
     filename = path.stem  # e.g., 'nazanin-10-in-mountainous-area-7657810281'
@@ -122,6 +124,22 @@ def extract_sections(md_content):
     if last_heading:
         sections[last_heading] = md_content[last_index:].strip()
     return sections
+
+def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
+    """Send POST request to the API with retry logic."""
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if attempt == retries:
+                print(f"Failed after {retries} attempts: {e}")
+                raise
+            else:
+                wait_time = backoff_factor ** attempt
+                print(f"Attempt {attempt} failed: {e}. Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
 
 def upload_file_to_github(owner, repo, path, content, commit_message, branch='main', github_token=None):
     """
@@ -218,8 +236,8 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         # Generate commit message
         commit_message = f"Add generated image for {Path(md_file_path).name}"
 
-        # Define the path in the repository
-        repo_path = str(image_path)
+        # Define the path in the repository (use forward slashes)
+        repo_path = str(image_path).replace("\\", "/")
 
         # Upload the image to GitHub using the Contents API
         success = upload_file_to_github(
