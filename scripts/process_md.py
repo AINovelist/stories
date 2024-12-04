@@ -68,6 +68,8 @@ def process_markdown(md_file_path, account_id, api_token):
 
     except requests.exceptions.RequestException as e:
         print(f"HTTP Request failed for {md_file_path}: {e}")
+    except subprocess.CalledProcessError as e:
+        print(f"Git command failed for {md_file_path}: {e}")
     except Exception as e:
         print(f"An error occurred while processing {md_file_path}: {e}")
 

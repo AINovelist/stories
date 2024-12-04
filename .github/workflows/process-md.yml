@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
         with:
-          persist-credentials: false  # Ensure the token is not automatically used
+          fetch-depth: 0  # Fetch all history for git diff
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -28,8 +28,10 @@ jobs:
       - name: Get List of Added Markdown Files
         id: get_files
         run: |
-          echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '/en/.*\.md$' || true)"
-      
+          files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '/en/.*\.md$' || true)
+          echo "files=$files" >> $GITHUB_OUTPUT
+          echo "Found files: $files"  # Debugging statement
+
       - name: Process Each New Markdown File
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
