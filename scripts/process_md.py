@@ -109,7 +109,6 @@ def generate_custom_prompt(metadata, md_content, art_style):
         "Color Scheme: Bright and lively colors.\n"
         "**Orientation:** Landscape\n"
         "**Aspect Ratio:** 16:9\n"
-        "Include elements like lush trees, happy animals, and clean rivers to depict a healthy ecosystem."
     )
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
