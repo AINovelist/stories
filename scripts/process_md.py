@@ -7,6 +7,17 @@ import re
 import unicodedata
 import time
 
+# Define available art styles
+AVAILABLE_ART_STYLES = [
+    "Watercolor",
+    "Flat Design",
+    "Vector Art",
+    "Hand-Drawn",
+    "3D Rendered",
+    "Storybook Illustration",
+    "Chibi"
+]
+
 def get_env_variable(name):
     """Retrieve environment variable or exit if not found."""
     value = os.getenv(name)
@@ -73,15 +84,15 @@ def extract_metadata(md_file_path):
         'topic': topic
     }
 
-def generate_custom_prompt(metadata, md_content):
+def generate_custom_prompt(metadata, md_content, art_style):
     """
-    Generates a custom prompt based on extracted metadata and Markdown content.
+    Generates a custom prompt based on extracted metadata, Markdown content, and selected art style.
     """
     title = extract_title(md_content)
     sections = extract_sections(md_content)
 
     # Base prompt with aspect ratio instructions
-    prompt = f"Create a vibrant and engaging **wide**, **landscape-oriented** illustration for children based on the story titled '{title}':\n"
+    prompt = f"Create a vibrant and engaging **wide**, **landscape-oriented** {art_style} illustration for children based on the story titled '{title}':\n"
 
     # Include metadata
     prompt += f"\n**Author:** {metadata['kid_name']} (Age: {metadata['age']})\n"
@@ -94,10 +105,11 @@ def generate_custom_prompt(metadata, md_content):
 
     # Additional instructions
     prompt += (
-        "\nArt Style: Cartoon\n"
+        f"\nArt Style: {art_style}\n"
         "Color Scheme: Bright and lively colors.\n"
         "**Orientation:** Landscape\n"
-        "**Aspect Ratio:** 16:9"
+        "**Aspect Ratio:** 16:9\n"
+        "Include elements like lush trees, happy animals, and clean rivers to depict a healthy ecosystem."
     )
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
@@ -200,7 +212,7 @@ def upload_file_to_github(owner, repo, path, content, commit_message, branch='ma
         return False
 
 def process_markdown(md_file_path, account_id, api_token, github_owner, github_repo, github_branch='main', github_pat=None):
-    """Process a single Markdown file to generate and upload an image."""
+    """Process a single Markdown file to generate and upload images in different art styles."""
     metadata = extract_metadata(md_file_path)
     if not metadata:
         return None
@@ -211,64 +223,66 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         with open(md_file_path, 'r', encoding='utf-8') as file:
             content = file.read()
 
-        # Generate custom prompt
-        prompt = generate_custom_prompt(metadata, content)
-        print(f"Generated Prompt: {prompt}")
+        # Loop through each art style to generate images
+        for art_style in AVAILABLE_ART_STYLES:
+            print(f"Generating image with art style: {art_style}")
 
-        # Prepare API request with aspect_ratio
-        api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
-        payload = {
-            "prompt": prompt,
-            "height": 576,       # For 16:9 aspect ratio with width=1024
-            "width": 1024,
-        }
-        headers = {
-            "Authorization": f"Bearer {api_token}",
-            "Content-Type": "application/json"
-        }
+            # Generate custom prompt for the current art style
+            prompt = generate_custom_prompt(metadata, content, art_style)
+            print(f"Generated Prompt for {art_style}: {prompt}")
 
-        print(f"Sending request to Cloudflare AI API for file: {md_file_path}")
-        # Send the request to the Cloudflare AI API with retry logic
-        image_data = send_api_request(api_url, payload, headers)
+            # Prepare API request with aspect_ratio and other parameters
+            api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
+            payload = {
+                "prompt": prompt,
+                "height": 576,       # For 16:9 aspect ratio with width=1024
+                "width": 1024,
+            }
+            headers = {
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json"
+            }
 
-        if image_data:
-            # Save the image data as a binary file
-            image_filename = Path(md_file_path).stem + ".png"
-            image_path = Path(md_file_path).parent.parent / 'images' / image_filename
+            print(f"Sending request to Cloudflare AI API for art style: {art_style}")
+            # Send the request to the Cloudflare AI API with retry logic
+            image_data = send_api_request(api_url, payload, headers)
 
-            # Save the image data directly to the file
-            with open(image_path, 'wb') as image_file:
-                image_file.write(image_data)
-            
-            print(f"Image saved as {image_path}")
+            if image_data:
+                # Determine image filename with art style suffix
+                image_filename = f"{Path(md_file_path).stem}-{slugify(art_style)}.png"
+                image_path = Path(md_file_path).parent.parent / 'images' / image_filename
 
-            # Now base64 encode the image data before uploading to GitHub
-            encoded_image_data = base64.b64encode(image_data).decode('utf-8')
+                # Ensure the images directory exists
+                image_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Upload the image to GitHub (base64 encoded content)
-            commit_message = f"Add generated image for {Path(md_file_path).name}"
-            repo_path = str(image_path).replace("\\", "/")
+                # Save the image data as a binary file locally (optional)
+                with open(image_path, 'wb') as image_file:
+                    image_file.write(image_data)
+                print(f"Image saved locally as {image_path}")
 
-            # Upload the image to GitHub using the Contents API
-            success = upload_file_to_github(
-                owner=github_owner,
-                repo=github_repo,
-                path=repo_path,
-                content=encoded_image_data,  # Send the base64-encoded content
-                commit_message=commit_message,
-                branch=github_branch,
-                github_token=github_pat if github_pat else os.getenv('GHB_PAT')
-            )
+                # Now base64 encode the image data before uploading to GitHub
+                encoded_image_data = base64.b64encode(image_data).decode('utf-8')
 
-            if success:
-                print(f"Successfully uploaded {image_filename} to GitHub.")
-                return image_path
+                # Upload the image to GitHub (base64 encoded content)
+                commit_message = f"Add generated {art_style} image for {Path(md_file_path).name}"
+                repo_path = str(image_path).replace("\\", "/")  # Ensure forward slashes
+
+                success = upload_file_to_github(
+                    owner=github_owner,
+                    repo=github_repo,
+                    path=repo_path,
+                    content=encoded_image_data,  # Send the base64-encoded content
+                    commit_message=commit_message,
+                    branch=github_branch,
+                    github_token=github_pat if github_pat else os.getenv('GHB_PAT')  # Ensure the correct env variable
+                )
+
+                if success:
+                    print(f"Successfully uploaded {image_filename} to GitHub.")
+                else:
+                    print(f"Failed to upload {image_filename} to GitHub.")
             else:
-                print(f"Failed to upload {image_filename} to GitHub.")
-                return None
-        else:
-            print("Failed to get a valid image from the API.")
-            return None
+                print(f"Failed to generate image for art style: {art_style}")
 
     except requests.exceptions.HTTPError as e:
         print(f"HTTP Request failed for {md_file_path}: {e}")
@@ -278,7 +292,7 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
     except Exception as e:
         print(f"An error occurred while processing {md_file_path}: {e}")
 
-    return None  # Indicate failure
+    return None  # Indicate completion (success or partial)
 
 def main():
     """Main function to process the provided Markdown file."""
