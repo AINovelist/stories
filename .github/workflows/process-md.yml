@@ -5,6 +5,9 @@ on:
     paths:
       - 'kids/**/en/*.md'  # Trigger only on new .md files in en/ directories
 
+permissions:
+  contents: write  # Grants write access to contents
+
 jobs:
   process-markdown:
     if: github.actor != 'github-actions[bot]'
