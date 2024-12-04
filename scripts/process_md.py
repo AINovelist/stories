@@ -93,7 +93,7 @@ def generate_custom_prompt(metadata, md_content):
         prompt += f"\n**{heading}**: {content}\n"
 
     # Additional instructions
-    prompt += "\nArt Style: Cartoon\nColor Scheme: Bright and lively colors.\nEnsure that the image captures the essence of water conservation and animal protection."
+    prompt += "\nArt Style: Cartoon\nColor Scheme: Bright and lively colors.\nEnsure that the image captures the essence of water conservation and animal protection.\n**Orientation:** Landscape\n**Aspect Ratio:** 16:9"
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
 
