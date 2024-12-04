@@ -1,0 +1,119 @@
+name: Process New Markdown Files
+
+on:
+  push:
+    paths:
+      - 'kids/**/en/*.md'
+
+jobs:
+  process-markdown:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install Dependencies
+        run: |
+          npm init -y
+          npm install axios
+
+      - name: Process New Markdown Files
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node <<EOF
+          const fs = require('fs');
+          const path = require('path');
+          const axios = require('axios');
+
+          // Function to get list of modified files in the push
+          const getModifiedFiles = () => {
+            const gitDiffCommand = 'git diff --name-status HEAD^ HEAD';
+            const { execSync } = require('child_process');
+            const output = execSync(gitDiffCommand).toString();
+            const files = output.split('\\n').filter(line => line).map(line => {
+              const [status, filePath] = line.split('\\t');
+              return { status, filePath };
+            });
+            return files;
+          };
+
+          // Function to decode Base64 and save image
+          const saveImage = (base64Image, outputPath) => {
+            const buffer = Buffer.from(base64Image, 'base64');
+            fs.writeFileSync(outputPath, buffer);
+          };
+
+          // Main processing function
+          const processFiles = async () => {
+            const modifiedFiles = getModifiedFiles();
+            const mdFiles = modifiedFiles.filter(file => file.status === 'A' && file.filePath.endsWith('.md') && file.filePath.includes('/en/'));
+
+            for (const file of mdFiles) {
+              const filePath = file.filePath;
+              const fileContent = fs.readFileSync(filePath, 'utf8');
+
+              // Create prompt (customize this as needed)
+              const prompt = fileContent.replace(/\\n/g, ' ').substring(0, 2000); // Ensure prompt length <= 2048
+
+              // Prepare API request
+              const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
+              const payload = {
+                prompt: prompt,
+                steps: 4
+              };
+
+              try {
+                const response = await axios.post(apiUrl, payload, {
+                  headers: {
+                    'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                    'Content-Type': 'application/json'
+                  }
+                });
+
+                if (response.data && response.data.image) {
+                  const base64Image = response.data.image;
+                  const imageBuffer = Buffer.from(base64Image, 'base64');
+
+                  // Determine image extension (assuming PNG; adjust if needed)
+                  const imageExtension = 'png';
+                  const imageFileName = path.basename(filePath, '.md') + `.${imageExtension}`;
+                  const imagePath = path.join(path.dirname(filePath), imageFileName);
+
+                  // Save the image
+                  fs.writeFileSync(imagePath, imageBuffer);
+                  console.log(`Image saved to ${imagePath}`);
+
+                  // Configure Git user
+                  execSync('git config user.name "github-actions[bot]"');
+                  execSync('git config user.email "github-actions[bot]@users.noreply.github.com"');
+
+                  // Add and commit the image
+                  execSync(`git add ${imagePath}`);
+                  execSync(`git commit -m "Add generated image for ${filePath}"`);
+
+                } else {
+                  console.error(`No image returned for ${filePath}`);
+                }
+              } catch (error) {
+                console.error(`Error processing ${filePath}:`, error.message);
+              }
+            }
+
+            // Push the changes if any
+            try {
+              execSync('git push');
+            } catch (error) {
+              console.error('Error pushing changes:', error.message);
+            }
+          };
+
+          processFiles();
+          EOF
