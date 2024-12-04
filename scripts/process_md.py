@@ -204,7 +204,7 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/black-forest-labs/flux-1-schnell"
         payload = {
             "prompt": prompt,
-            "steps": 10  # Adjust as needed
+            "steps": 8  # Adjust as needed
         }
         headers = {
             "Authorization": f"Bearer {api_token}",
