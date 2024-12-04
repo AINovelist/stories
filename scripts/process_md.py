@@ -153,18 +153,14 @@ def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
             print(f"Attempting request... (Attempt {attempt})")
             response = requests.post(api_url, json=payload, headers=headers)
             response.raise_for_status()
-            
-            # Log the response text to inspect what is being returned
-            print(f"Response Status: {response.status_code}")
-            print(f"Response Body: {response.text}")
 
-            # Try to parse the JSON response
-            try:
-                return response.json()
-            except ValueError:
-                print("Error: The response is not valid JSON.")
-                return None
-                
+            # Log the response status
+            print(f"Response Status: {response.status_code}")
+
+            # If the response is binary image data
+            if response.status_code == 200:
+                return response.content  # Return the binary content directly
+
         except requests.exceptions.RequestException as e:
             if attempt == retries:
                 print(f"Failed after {retries} attempts: {e}")
@@ -173,6 +169,8 @@ def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
                 wait_time = backoff_factor ** attempt
                 print(f"Attempt {attempt} failed: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
+
+    return None  # Return None if all attempts fail
 
 def upload_file_to_github(owner, repo, path, content, commit_message, branch='main', github_token=None):
     """
@@ -348,9 +346,6 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             "prompt": prompt,
             "height": 576,       # For 16:9 aspect ratio with width=1024
             "width": 1024,
-            # "guidance": 7.5,     # Adjust as needed
-            # "num_steps": 20      # Maximum allowed
-            # Add other parameters if needed
         }
         headers = {
             "Authorization": f"Bearer {api_token}",
@@ -359,64 +354,42 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
 
         print(f"Sending request to Cloudflare AI API for file: {md_file_path}")
         # Send the request to the Cloudflare AI API with retry logic
-        data = send_api_request(api_url, payload, headers)
+        image_data = send_api_request(api_url, payload, headers)
 
-        print(f"API Response: {data}")
+        if image_data:
+            # Save the image data as a binary file
+            image_filename = Path(md_file_path).stem + ".png"
+            image_path = Path(md_file_path).parent.parent / 'images' / image_filename
 
-        # Check if the response contains image data
-        if isinstance(data, dict):
-            # Assuming the API might return binary data or Base64 encoded image
-            if 'result' in data and 'image' in data['result']:
-                image_data = data['result']['image']
-                # If image data is in Base64 format
-                if isinstance(image_data, str):
-                    image_data = base64.b64decode(image_data)
-                # If image data is already in binary format, we don't need to decode
-                else:
-                    print("Received binary image data.")
+            # Save the image data directly to the file
+            with open(image_path, 'wb') as image_file:
+                image_file.write(image_data)
+            
+            print(f"Image saved as {image_path}")
+
+            # Now upload the image to GitHub (without base64 encoding)
+            commit_message = f"Add generated image for {Path(md_file_path).name}"
+            repo_path = str(image_path).replace("\\", "/")
+
+            # Upload the image to GitHub using the Contents API
+            success = upload_file_to_github(
+                owner=github_owner,
+                repo=github_repo,
+                path=repo_path,
+                content=image_data,  # Send the raw binary content
+                commit_message=commit_message,
+                branch=github_branch,
+                github_token=github_pat if github_pat else os.getenv('GHB_PAT')
+            )
+
+            if success:
+                print(f"Successfully uploaded {image_filename} to GitHub.")
+                return image_path
             else:
-                print(f"Error: No 'image' field in API response for {md_file_path}")
+                print(f"Failed to upload {image_filename} to GitHub.")
                 return None
         else:
-            print(f"Unexpected API response format for {md_file_path}: {data}")
-            return None
-
-        # Save the image to a file
-        image_filename = Path(md_file_path).stem + ".png"
-        images_dir = Path(md_file_path).parent.parent / 'images'  # Moves up from /en/ to the topic directory and then into /images/
-
-        # Ensure the images directory exists locally (optional)
-        images_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save the image data to a file
-        image_path = images_dir / image_filename
-        with open(image_path, 'wb') as f:
-            f.write(image_data)
-        print(f"Image saved to {image_path}")
-
-        # Upload the image to GitHub using the Contents API
-        with open(image_path, "rb") as image_file:
-            image_base64_github = base64.b64encode(image_file.read()).decode('utf-8')
-
-        commit_message = f"Add generated image for {Path(md_file_path).name}"
-        repo_path = str(image_path).replace("\\", "/")  # GitHub requires forward slashes
-
-        # Upload the image to GitHub using the Contents API
-        success = upload_file_to_github(
-            owner=github_owner,
-            repo=github_repo,
-            path=repo_path,
-            content=image_base64_github,
-            commit_message=commit_message,
-            branch=github_branch,
-            github_token=github_pat if github_pat else os.getenv('GHB_PAT')
-        )
-
-        if success:
-            print(f"Successfully uploaded {image_filename} to GitHub.")
-            return image_path
-        else:
-            print(f"Failed to upload {image_filename} to GitHub.")
+            print("Failed to get a valid image from the API.")
             return None
 
     except requests.exceptions.HTTPError as e:
@@ -428,7 +401,6 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
         print(f"An error occurred while processing {md_file_path}: {e}")
 
     return None  # Indicate failure
-
 
 def main():
     """Main function to process the provided Markdown file."""
