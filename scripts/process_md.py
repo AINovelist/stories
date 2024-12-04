@@ -14,6 +14,7 @@ def get_env_variable(name):
 
 def process_markdown(md_file_path, account_id, api_token):
     try:
+        print(f"Reading Markdown file: {md_file_path}")
         # Read the .md file content
         with open(md_file_path, 'r', encoding='utf-8') as file:
             content = file.read()
@@ -34,6 +35,7 @@ def process_markdown(md_file_path, account_id, api_token):
             "Content-Type": "application/json"
         }
 
+        print(f"Sending request to Cloudflare AI API for file: {md_file_path}")
         # Send the request to the Cloudflare AI API
         response = requests.post(api_url, json=payload, headers=headers)
         response.raise_for_status()  # Raise an error for bad status codes

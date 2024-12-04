@@ -29,7 +29,9 @@ jobs:
         id: get_files
         run: |
           files=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '/en/.*\.md$' || true)
-          echo "files=$files" >> $GITHUB_OUTPUT
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           echo "Found files: $files"  # Debugging statement
 
       - name: Process Each New Markdown File
@@ -42,7 +44,7 @@ jobs:
             echo "No new .md files to process."
             exit 0
           fi
-          for file in $files; do
+          echo "$files" | while IFS= read -r file; do
             echo "Processing $file"
             python scripts/process_md.py "$file"
           done
