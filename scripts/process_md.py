@@ -36,7 +36,7 @@ def extract_metadata(md_file_path):
     topic = path.parent.parent.name  # Assuming structure: /kids/<Topic>/en/<filename>.md
 
     # Extract filename without extension
-    filename = path.stem  # e.g., 'baran-6-in-city-8406805212' or '10-in-village-1425637061'
+    filename = path.stem  # e.g., 'nazanin-10-in-mountainous-area-7657810281'
 
     # Split the filename by hyphens
     parts = filename.split('-')
@@ -174,12 +174,13 @@ def process_markdown(md_file_path, account_id, api_token):
 
         print(f"API Response: {data}")
 
-        if 'image' not in data:
+        # Updated extraction of 'image' from 'result'
+        if 'result' not in data or 'image' not in data['result']:
             print(f"Error: No 'image' field in API response for {md_file_path}")
             return None  # Indicate failure
 
         # Decode the Base64 image
-        image_data = base64.b64decode(data['image'])
+        image_data = base64.b64decode(data['result']['image'])
 
         # Determine image extension (assuming PNG; adjust if necessary)
         image_extension = 'png'
