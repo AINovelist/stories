@@ -16,7 +16,8 @@ AVAILABLE_ART_STYLES = [
     "Hand-Drawn",
     "3D Rendered",
     "Storybook Illustration",
-    "Chibi"
+    "Chibi",
+    "Real"
 ]
 
 def get_env_variable(name):
@@ -93,13 +94,14 @@ def generate_custom_prompt(metadata, md_content, art_style):
     sections = extract_sections(md_content)
 
     # Base prompt with aspect ratio instructions
-    prompt = f"Create a vibrant and engaging **wide**, **landscape-oriented** {art_style} illustration for children based on the story titled '{title}':\n"
+    # prompt = f"Create a vibrant and engaging wide landscape-oriented {art_style} image for children based on the story titled '{title}':\n"
+    prompt = f"kid in  {metadata['location'].replace('-', ' ').title()} , {art_style} image based on the story about {metadata['topic']}\n"
 
     # Include metadata
-    prompt += f"\n**Author:** {metadata['kid_name']} (Age: {metadata['age']})\n"
-    prompt += f"**Topic:** {metadata['topic']}\n"
-    prompt += f"**Location:** {metadata['location'].replace('-', ' ').title()}\n"
-
+    # prompt += f"\n**Author:** {metadata['kid_name']} (Age: {metadata['age']})\n"
+    # prompt += f"**Topic:** {metadata['topic']}\n"
+    # prompt += f"**Location:** {metadata['location'].replace('-', ' ').title()}\n"
+    # prompt += f"Emphasize the need for clear shapes and defined lines in your prompt. Specify that you want a polished, high-quality render\n"
     # Include sections with interactive prompts for the artist
     for heading, content in sections.items():
         prompt += f"\n**{heading}**: {content}\n"
@@ -125,11 +127,11 @@ def generate_custom_prompt(metadata, md_content, art_style):
         prompt += "The characters should have small bodies and large heads with cute, oversized eyes to give them a playful, adorable look.\n"
 
     # Additional instructions
-    prompt += (
-        "\nColor Scheme: Bright and lively colors.\n"
-        "**Orientation:** Landscape\n"
-        "**Aspect Ratio:** 16:9\n"
-    )
+    # prompt += (
+        # "\nColor Scheme: Bright and lively colors.\n"
+        # "**Orientation:** Landscape\n"
+        # "**Aspect Ratio:** 16:9\n"
+    # )
 
     return prompt[:2048]  # Ensure the prompt does not exceed 2048 characters
 
@@ -252,11 +254,14 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             print(f"Generated Prompt for {art_style}: {prompt}")
 
             # Prepare API request with aspect_ratio and other parameters
-            api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
+            # api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
+            api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
+            # 
             payload = {
                 "prompt": prompt,
                 "height": 576,       # For 16:9 aspect ratio with width=1024
                 "width": 1024,
+                # "guidance": 1
             }
             headers = {
                 "Authorization": f"Bearer {api_token}",
