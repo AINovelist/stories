@@ -27,7 +27,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests
+          pip install requests tinify
 
       - name: Get List of Added Markdown Files
         id: get_files

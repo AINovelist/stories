@@ -6,8 +6,8 @@ from pathlib import Path
 import re
 import unicodedata
 import time
+import tinify
 
-# Define available art styles
 AVAILABLE_ART_STYLES = [
     "Cartoon",
     "Watercolor",
@@ -19,6 +19,35 @@ AVAILABLE_ART_STYLES = [
     "Chibi",
     "Real"
 ]
+
+def optimize_image(image_path):
+    """
+    Optimizes an image using the TinyPNG API and returns the optimized image content.
+    """
+    try:
+        # Set the TinyPNG API key
+        tinify.key = get_env_variable('TINYPNG_API_KEY')
+
+        # Read the image file
+        with open(image_path, 'rb') as source:
+            source_data = source.read()
+
+        # Optimize the image and return the optimized data
+        result_data = tinify.from_buffer(source_data).to_buffer()
+        return result_data
+
+    except tinify.errors.AccountError as e:
+        print(f"TinyPNG API account error: {e}")
+        return None
+
+    except tinify.errors.ClientError as e:
+        print(f"TinyPNG API client error: {e}")
+        return None
+
+    except Exception as e:
+        print(f"Error optimizing image {image_path}: {e}")
+        return None
+
 
 def get_env_variable(name):
     """Retrieve environment variable or exit if not found."""
@@ -44,17 +73,10 @@ def extract_metadata(md_file_path):
     Returns a dictionary with keys: kid_name, age, location, random_id, topic.
     """
     path = Path(md_file_path)
-    # Extract topic from the parent directory name (e.g., Tree Preservation)
-    # Assuming structure: /kids/<Topic>/en/<filename>.md
     topic = path.parent.parent.name
-
-    # Extract filename without extension
     filename = path.stem  # e.g., 'nima-10-in-suburbs-2178184495'
-
-    # Split the filename by hyphens
     parts = filename.split('-')
 
-    # Determine if the first part is age (2-11)
     if re.fullmatch(r'[2-9]|1[0-1]', parts[0]):
         # No kid_name
         kid_name = "Unknown"
@@ -172,10 +194,8 @@ def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
             response = requests.post(api_url, json=payload, headers=headers)
             response.raise_for_status()
 
-            # Log the response status
             print(f"Response Status: {response.status_code}")
 
-            # If the response is binary image data
             if response.status_code == 200:
                 return response.content  # Return the binary content directly
 
@@ -188,7 +208,7 @@ def send_api_request(api_url, payload, headers, retries=3, backoff_factor=2):
                 print(f"Attempt {attempt} failed: {e}. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
 
-    return None  # Return None if all attempts fail
+    return None
 
 def upload_file_to_github(owner, repo, path, content, commit_message, branch='main', github_token=None):
     """
@@ -201,10 +221,8 @@ def upload_file_to_github(owner, repo, path, content, commit_message, branch='ma
         "Accept": "application/vnd.github.v3+json"
     }
 
-    # Check if the file already exists to get its SHA
     response = requests.get(api_url, headers=headers)
     if response.status_code == 200:
-        # File exists, prepare to update
         file_info = response.json()
         sha = file_info['sha']
         payload = {
@@ -214,7 +232,6 @@ def upload_file_to_github(owner, repo, path, content, commit_message, branch='ma
             "branch": branch
         }
     elif response.status_code == 404:
-        # File does not exist, prepare to create
         payload = {
             "message": commit_message,
             "content": content,
@@ -224,7 +241,6 @@ def upload_file_to_github(owner, repo, path, content, commit_message, branch='ma
         print(f"Error accessing {api_url}: {response.status_code} {response.text}")
         return False
 
-    # Create or update the file
     put_response = requests.put(api_url, json=payload, headers=headers)
     if put_response.status_code in [200, 201]:
         print(f"Successfully {'updated' if response.status_code == 200 else 'created'} {path}")
@@ -241,19 +257,15 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
 
     try:
         print(f"Reading Markdown file: {md_file_path}")
-        # Read the .md file content
         with open(md_file_path, 'r', encoding='utf-8') as file:
             content = file.read()
 
-        # Loop through each art style to generate images
         for art_style in AVAILABLE_ART_STYLES:
             print(f"Generating image with art style: {art_style}")
 
-            # Generate custom prompt for the current art style
             prompt = generate_custom_prompt(metadata, content, art_style)
             print(f"Generated Prompt for {art_style}: {prompt}")
 
-            # Prepare API request with aspect_ratio and other parameters
             # api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning"
             api_url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
             # 
@@ -269,26 +281,29 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
             }
 
             print(f"Sending request to Cloudflare AI API for art style: {art_style}")
-            # Send the request to the Cloudflare AI API with retry logic
             image_data = send_api_request(api_url, payload, headers)
 
             if image_data:
-                # Determine image filename with art style suffix
                 image_filename = f"{Path(md_file_path).stem}-{slugify(art_style)}.png"
                 image_path = Path(md_file_path).parent.parent / 'images' / image_filename
 
-                # Ensure the images directory exists
                 image_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # Save the image data as a binary file locally (optional)
                 with open(image_path, 'wb') as image_file:
                     image_file.write(image_data)
                 print(f"Image saved locally as {image_path}")
 
-                # Now base64 encode the image data before uploading to GitHub
-                encoded_image_data = base64.b64encode(image_data).decode('utf-8')
 
-                # Upload the image to GitHub (base64 encoded content)
+                try:
+                    optimized_image_data = optimize_image(image_path)
+                    with open(image_path, 'wb') as optimized_image_file:
+                        optimized_image_file.write(optimized_image_data)
+                    print(f"Optimized image saved locally as {image_path}")
+                    encoded_image_data = base64.b64encode(optimized_image_data).decode('utf-8')
+                except Exception as e:
+                    print(f"Failed to optimize image {image_filename}: {e}")
+                    encoded_image_data = base64.b64encode(image_data).decode('utf-8')
+
                 commit_message = f"Add generated {art_style} image for {Path(md_file_path).name}"
                 repo_path = str(image_path).replace("\\", "/")  # Ensure forward slashes
 
@@ -296,10 +311,10 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
                     owner=github_owner,
                     repo=github_repo,
                     path=repo_path,
-                    content=encoded_image_data,  # Send the base64-encoded content
+                    content=encoded_image_data,
                     commit_message=commit_message,
                     branch=github_branch,
-                    github_token=github_pat if github_pat else os.getenv('GHB_PAT')  # Ensure the correct env variable
+                    github_token=github_pat if github_pat else os.getenv('GHB_PAT')
                 )
 
                 if success:
@@ -317,30 +332,23 @@ def process_markdown(md_file_path, account_id, api_token, github_owner, github_r
     except Exception as e:
         print(f"An error occurred while processing {md_file_path}: {e}")
 
-    return None  # Indicate completion (success or partial)
+    return None
 
 def main():
     """Main function to process the provided Markdown file."""
     if len(sys.argv) != 2:
         print("Usage: python scripts/process_md.py <path_to_md_file>")
         sys.exit(1)
-
     md_file_path = sys.argv[1]
     if not os.path.isfile(md_file_path):
         print(f"Error: File {md_file_path} does not exist.")
         sys.exit(1)
-
     account_id = get_env_variable('CLOUDFLARE_ACCOUNT_ID')
     api_token = get_env_variable('CLOUDFLARE_API_TOKEN')
-
-    # GitHub Repository Details
-    github_owner = "AINovelist"  # Replace with your GitHub username or organization
-    github_repo = "stories"       # Replace with your repository name
-    github_branch = "main"        # Replace with your default branch name if different
-
-    # Optional: Use a GitHub PAT if needed
-    github_pat = os.getenv('GHB_PAT')  # Ensure you set this in your GitHub Secrets
-
+    github_owner = "AINovelist"
+    github_repo = "stories"
+    github_branch = "main"
+    github_pat = os.getenv('GHB_PAT')
     image_path = process_markdown(
         md_file_path,
         account_id,
