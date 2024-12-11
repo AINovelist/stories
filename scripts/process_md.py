@@ -27,7 +27,7 @@ def optimize_image(image_path):
     try:
         # Set the TinyPNG API key
         tinify.key = get_env_variable('TINYPNG_API_KEY')
-
+        # tinify.proxy = "http://127.0.0.1:12334"
         # Read the image file
         with open(image_path, 'rb') as source:
             source_data = source.read()
@@ -68,35 +68,28 @@ def slugify(text):
     return text
 
 def extract_metadata(md_file_path):
-    """
-    Extract metadata from the file path and name.
-    Returns a dictionary with keys: kid_name, age, location, random_id, topic.
-    """
     path = Path(md_file_path)
     topic = path.parent.parent.name
-    filename = path.stem  # e.g., 'nima-10-in-suburbs-2178184495'
+    filename = path.stem
+
+    # Remove the random number at the end of the filename
+    filename = re.sub(r'-\d+$', '', filename)
+
     parts = filename.split('-')
 
-    if re.fullmatch(r'[2-9]|1[0-1]', parts[0]):
-        # No kid_name
-        kid_name = "Unknown"
+    if parts[0].isdigit():
+        # Filename format: "{age}-in-{location}-{random_id}"
         age = parts[0]
-        if len(parts) < 4:
-            print(f"Error: Filename '{filename}' does not have enough parts.")
-            return None
-        location = parts[2]
-        random_id = parts[3]
+        location = '-'.join(parts[2:-1])
+        random_id = parts[-1]
+        kid_name = "Unknown"
     else:
-        # kid_name present
-        if len(parts) < 5:
-            print(f"Error: Filename '{filename}' does not have enough parts.")
-            return None
+        # Filename format: "{kid_name}-{age}-in-{location}-{random_id}"
         kid_name = parts[0]
         age = parts[1]
-        location = parts[3]
-        random_id = parts[4]
+        location = '-'.join(parts[3:-1])
+        random_id = parts[-1]
 
-    # Clean kid_name
     kid_name_clean = slugify(kid_name)
 
     return {
