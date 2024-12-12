@@ -1,2 +1,9 @@
 .DS_Store
 
+# Python virtual environment
+venv/
+scripts/venv/
+
+# Python compiled files
+__pycache__/
+scripts/__pycache__/
