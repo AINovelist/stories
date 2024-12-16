@@ -25,7 +25,7 @@ def optimize_image(image_path):
     """Optimize image using TinyPNG."""
     try:
         tinify.key = get_env_variable('TINYPNG_API_KEY')
-        # tinify.proxy = "http://127.0.0.1:12334"
+        tinify.proxy = "http://127.0.0.1:12334"
         with open(image_path, 'rb') as source:
             source_data = source.read()
         result_data = tinify.from_buffer(source_data).to_buffer()
@@ -59,7 +59,7 @@ def generate_custom_prompt(page_data, art_style):
     """Generate image prompt based on page content and selected art style."""
     title = page_data['title']
     content = page_data['content']['response']
-    prompt = f"Art style: {art_style}\n\nTitle: {title}\nContent: {content}\nImage Prompt: {page_data['image_prompt']}\n"
+    prompt = f"Art style: {art_style}\n{page_data['image_prompt']}\n"
     
     if art_style == "Cartoon":
         prompt += "Exaggerate facial expressions, bright colors, and a whimsical feel."
